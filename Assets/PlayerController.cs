@@ -26,7 +26,7 @@ void Start()
     }
 
    
-        SpawnTargets(10);
+        SpawnTargets(50);
     
 }
 
@@ -145,4 +145,27 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
             // Qui chiamerai la Coroutine per il feedback visivo
         }
     }
+	public override void OnNetworkSpawn()
+	{
+    // Recuperiamo la camera che abbiamo appena messo dentro il Prefab
+    Camera miaCamera = GetComponentInChildren<Camera>();
+
+    if (IsOwner)
+    {
+        // Se questo è il MIO cubo, attiva la camera
+        miaCamera.enabled = true;
+        
+        // Se la camera ha un AudioListener, attiva anche quello solo per me
+        if(miaCamera.TryGetComponent<AudioListener>(out var listener))
+            listener.enabled = true;
+    }
+    else
+    {
+        // Se è il cubo di un altro, spegni la sua camera sul mio schermo
+        miaCamera.enabled = false;
+        
+        if(miaCamera.TryGetComponent<AudioListener>(out var listener))
+            listener.enabled = false;
+    }
+	}
 }
