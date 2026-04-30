@@ -9,6 +9,7 @@ public class PlayerController : NetworkBehaviour
    [SerializeField] private float rotationSpeed = 1.0f; // Velocità di rotazione
 
 private Vector3 lastLookDirection = Vector3.forward; // Aggiungi questa variabile
+[SerializeField] private GameObject playerCanvas;
 
 // 1. Aggiungi il riferimento all'AudioSource in cima alla classe
 [SerializeField] private AudioSource laserSound;
@@ -158,6 +159,11 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
         // Se la camera ha un AudioListener, attiva anche quello solo per me
         if(miaCamera.TryGetComponent<AudioListener>(out var listener))
             listener.enabled = true;
+		
+		// ATTIVA IL MIRINO
+        if (playerCanvas != null) playerCanvas.SetActive(true);
+        
+        Cursor.lockState = CursorLockMode.Locked;
     }
     else
     {
@@ -166,6 +172,9 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
         
         if(miaCamera.TryGetComponent<AudioListener>(out var listener))
             listener.enabled = false;
+		
+		// DISATTIVA IL MIRINO PER GLI ALTRI
+        if (playerCanvas != null) playerCanvas.SetActive(false);
     }
 	}
 }
