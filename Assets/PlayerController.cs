@@ -6,7 +6,7 @@ public class PlayerController : NetworkBehaviour
     [SerializeField] private GameObject targetPrefab;
 	public float moveSpeed = 10f;
 
-   [SerializeField] private float rotationSpeed = 1.0f; // Velocità di rotazione
+  // [SerializeField] private float rotationSpeed = 1.0f; // Velocità di rotazione
 
 private Vector3 lastLookDirection = Vector3.forward; // Aggiungi questa variabile
 [SerializeField] private GameObject playerCanvas;
@@ -148,33 +148,34 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
     }
 	public override void OnNetworkSpawn()
 	{
-    // Recuperiamo la camera che abbiamo appena messo dentro il Prefab
-    Camera miaCamera = GetComponentInChildren<Camera>();
+		// Recuperiamo la camera che abbiamo appena messo dentro il Prefab
+		Camera miaCamera = GetComponentInChildren<Camera>();
 
-    if (IsOwner)
-    {
-        // Se questo è il MIO cubo, attiva la camera
-        miaCamera.enabled = true;
-        
-        // Se la camera ha un AudioListener, attiva anche quello solo per me
-        if(miaCamera.TryGetComponent<AudioListener>(out var listener))
-            listener.enabled = true;
-		
-		// ATTIVA IL MIRINO
-        if (playerCanvas != null) playerCanvas.SetActive(true);
-        
-        Cursor.lockState = CursorLockMode.Locked;
-    }
-    else
-    {
-        // Se è il cubo di un altro, spegni la sua camera sul mio schermo
-        miaCamera.enabled = false;
-        
-        if(miaCamera.TryGetComponent<AudioListener>(out var listener))
-            listener.enabled = false;
-		
-		// DISATTIVA IL MIRINO PER GLI ALTRI
-        if (playerCanvas != null) playerCanvas.SetActive(false);
-    }
+		if (IsOwner)
+		{
+			// Se questo è il MIO cubo, attiva la camera
+			miaCamera.enabled = true;
+			
+			// Se la camera ha un AudioListener, attiva anche quello solo per me
+			if(miaCamera.TryGetComponent<AudioListener>(out var listener))
+				listener.enabled = true;
+			
+			// ATTIVA IL MIRINO
+			if (playerCanvas != null) playerCanvas.SetActive(true);
+			
+			Cursor.lockState = CursorLockMode.Locked;
+
+		}
+		else
+		{
+			// Se è il cubo di un altro, spegni la sua camera sul mio schermo
+			miaCamera.enabled = false;
+			
+			if(miaCamera.TryGetComponent<AudioListener>(out var listener))
+				listener.enabled = false;
+			
+			// DISATTIVA IL MIRINO PER GLI ALTRI
+			if (playerCanvas != null) playerCanvas.SetActive(false);
+		}
 	}
 }
