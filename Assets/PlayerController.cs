@@ -165,6 +165,18 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
 			
 			Cursor.lockState = CursorLockMode.Locked;
 
+				// 1. Diamo un nome di base per sicurezza
+			string nomeDaInviare = "Player_" + OwnerClientId; 
+
+			// 2. Chiediamo al nuovo script il nome inserito dall'utente
+			if (CanvasNetworkUI.Instance != null)
+			{
+				nomeDaInviare = CanvasNetworkUI.Instance.PlayerName;
+			}
+
+			// 3. Lo inviamo al server!
+			AnnounceJoinServerRpc(nomeDaInviare);
+
 		}
 		else
 		{
@@ -178,4 +190,31 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
 			if (playerCanvas != null) playerCanvas.SetActive(false);
 		}
 	}
+	
+	[ServerRpc]
+    public void AnnounceJoinServerRpc(string nome)
+    {
+        // Il giocatore appena entrato invia il suo nome al Server.
+        // Il Server chiama subito il ClientRpc per avvisare tutti gli altri.
+        AnnounceJoinClientRpc(nome);
+    }
+
+    [ClientRpc]
+    private void AnnounceJoinClientRpc(string nome)
+    {
+        // Questo pezzo di codice scatta in contemporanea sui PC di TUTTI i giocatori.
+        
+        // 1. Lo scriviamo in console per sicurezza
+        Debug.Log("<color=green>NUOVO GIOCATORE: </color>" + nome + " è entrato nell'arena!");
+
+        // 2. Se hai mantenuto il tuo NotificationManager, togli i commenti (//) 
+        // dalle righe qui sotto per far apparire la scritta a schermo:
+        
+        // if (NotificationManager.Instance != null)
+        // {
+        //     NotificationManager.Instance.ShowNotification(nome + " è entrato in partita!");
+        // }
+    }
+	
+	
 }
