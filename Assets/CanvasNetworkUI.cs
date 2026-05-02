@@ -3,7 +3,6 @@ using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using System.Collections;
 
 public class CanvasNetworkUI : MonoBehaviour
 {
@@ -11,18 +10,17 @@ public class CanvasNetworkUI : MonoBehaviour
 
     [Header("Elementi UI")]
     public TMP_InputField nameInputField;
-    public Button playButton; 
+    public TMP_InputField ipInputField; // Trascina qui il nuovo InputField dell'IP
+    public Button hostButton;           // Trascina qui il tasto "Crea"
+    public Button clientButton;         // Trascina qui il tasto "Partecipa"
     public TextMeshProUGUI statusText;
 
-    [Header("Contenitori e Telecamere")]
+    [Header("Contenitori")]
     public GameObject uiPanel; 
     public GameObject menuCamera;
     public GameObject playerListPanel;
 
     public string PlayerName { get; private set; } = "Anonimo";
-    
-    // Variabile per capire se stiamo cercando una partita o se siamo già in gioco
-    private bool staSondandoLaRete = false;
 
     private void Awake()
     {
@@ -32,125 +30,96 @@ public class CanvasNetworkUI : MonoBehaviour
 
     private void Start()
     {
-        playButton.onClick.AddListener(AvviaMatchmaking);
+        hostButton.onClick.AddListener(AvviaHost);
+        clientButton.onClick.AddListener(AvviaClient);
         nameInputField.onValueChanged.AddListener(UpdateName);
         
-        statusText.text = "Stato: Pronti a giocare!";
+        // Di default mettiamo l'indirizzo locale per i tuoi test
+        ipInputField.text = "127.0.0.1";
+        statusText.text = "LaserTag Multiplayer Pronto";
 
-        // Sottoscrizione agli eventi di Netcode
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
     }
 
-    private void OnDestroy()
-    {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
-            NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
-        }
-    }
-
     private void UpdateName(string newName)
     {
-        if (!string.IsNullOrWhiteSpace(newName)) 
-            PlayerName = newName;
+        if (!string.IsNullOrWhiteSpace(newName)) PlayerName = newName;
     }
 
-    // 1. IL GIOCATORE PREME "ENTRA NELL'ARENA"
-    private void AvviaMatchmaking()
+    // --- LOGICA PER IL PROF ---
+    public void AvviaHost()
     {
-        statusText.text = "Ricerca arena in corso...";
-        staSondandoLaRete = true;
-        playButton.interactable = false;
+        string ipLocale = ipInputField.text; // Prende l'IP che hai scritto (es. 10.76.244.212)
 
-        // Configuriamo il trasporto per un tentativo di connessione lampo
         UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
         if (transport != null)
         {
-            transport.MaxConnectAttempts = 1; // Prova solo una volta
-            transport.ConnectTimeoutMS = 500; // Aspetta solo mezzo secondo
+            // Fondamentale: impostiamo l'indirizzo dell'Host prima di partire
+            transport.ConnectionData.Address = ipLocale;
+            // Opzionale: se la scuola usa porte diverse, assicurati che sia 7777
+            transport.ConnectionData.Port = 7777; 
         }
 
-        // Proviamo ad entrare come Client
-        NetworkManager.Singleton.StartClient();
-    }
-
-    // 2. SE TROVIAMO UN HOST, CI CONNETTIAMO
-    private void OnClientConnected(ulong clientId)
-    {
-        if (clientId == NetworkManager.Singleton.LocalClientId)
-        {
-            staSondandoLaRete = false;
-            NascondiMenu();
-        }
-    }
-
-    // 3. SE NON TROVIAMO NESSUNO, SCATTA IL FALLIMENTO
-    private void OnClientDisconnected(ulong clientId)
-    {
-        if (clientId == NetworkManager.Singleton.LocalClientId || clientId == 0)
-        {
-            if (staSondandoLaRete)
-            {
-                // Abbiamo fallito la ricerca: ora resettiamo e diventiamo Host
-                staSondandoLaRete = false;
-                StartCoroutine(ResetEPuliziaPerHost());
-            }
-            else
-            {
-                // Disconnessione normale durante il gioco
-                MostraMenu();
-                statusText.text = "Sei stato disconnesso.";
-                playButton.interactable = true;
-            }
-        }
-    }
-
-    // 4. COROUTINE DI PULIZIA: Il segreto per evitare l'errore critico
-    private IEnumerator ResetEPuliziaPerHost()
-    {
-        statusText.text = "Nessuna arena trovata. Creazione in corso...";
-
-        // Spegniamo il NetworkManager per chiudere i socket rimasti aperti dal tentativo Client
-        NetworkManager.Singleton.Shutdown();
-
-        // Aspettiamo che il sistema abbia finito di pulire tutto
-        yield return new WaitUntil(() => !NetworkManager.Singleton.ShutdownInProgress);
-
-        // Ripristiniamo i valori di trasporto standard per i futuri Client che si uniranno a noi
-        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-        if (transport != null)
-        {
-            transport.MaxConnectAttempts = 60; 
-            transport.ConnectTimeoutMS = 1000; 
-        }
-
-        // Ora che il terreno è pulito, avviamo l'Host
+        statusText.text = "Creazione arena su " + ipLocale + "...";
+        
         if (NetworkManager.Singleton.StartHost())
         {
             NascondiMenu();
         }
         else
         {
-            // Se fallisce ancora, mostriamo l'errore e riabilitiamo il tasto
+            statusText.text = "Errore: Impossibile creare l'arena.";
+        }
+    }
+
+    // --- LOGICA PER GLI ALUNNI ---
+   public void AvviaClient()
+    {
+        string ipDestinazione = ipInputField.text;
+        
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        if (transport != null)
+        {
+            // Forziamo l'indirizzo e assicuriamoci che la porta sia quella corretta (es. 7777)
+            transport.ConnectionData.Address = ipDestinazione;
+            // transport.ConnectionData.Port = 7777; // De-commenta questa riga se vuoi forzarla
+        }
+
+        statusText.text = "Ricerca arena su " + ipDestinazione + "...";
+        
+        // Avviamo il client
+        NetworkManager.Singleton.StartClient();
+    }
+
+    private void OnClientConnected(ulong clientId)
+    {
+        if (clientId == NetworkManager.Singleton.LocalClientId)
+        {
+            NascondiMenu();
+        }
+    }
+
+    private void OnClientDisconnected(ulong clientId)
+    {
+        if (clientId == NetworkManager.Singleton.LocalClientId)
+        {
             MostraMenu();
-            statusText.text = "Errore critico di rete!";
-            playButton.interactable = true;
+            statusText.text = "Disconnesso dall'arena.";
         }
     }
 
     private void NascondiMenu()
     {
-        if (uiPanel != null) uiPanel.SetActive(false);
-        if (menuCamera != null) menuCamera.SetActive(false);
-        if (playerListPanel != null) playerListPanel.SetActive(true);
+        uiPanel.SetActive(false);
+        menuCamera.SetActive(false);
+        playerListPanel.SetActive(true);
     }
 
     private void MostraMenu()
     {
-        if (uiPanel != null) uiPanel.SetActive(true);
-        if (menuCamera != null) menuCamera.SetActive(true);
-        if (playerListPanel != null) playerListPanel.SetActive(false);
+        uiPanel.SetActive(true);
+        menuCamera.SetActive(true);
+        playerListPanel.SetActive(false);
     }
 }
