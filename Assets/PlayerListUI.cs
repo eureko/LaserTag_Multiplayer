@@ -27,16 +27,40 @@ public class PlayerListUI : MonoBehaviour
         }
     }
 
-    private void AggiornaLista()
+   private void AggiornaLista()
     {
-        string currentPlayers = "GIOCATORI:\n";
+        string currentPlayers = "GIOCATORI:\n\n";
 
-        // Questa operazione pesante ora avviene solo 2 volte al secondo, non 60!
-        PlayerNameSync[] allPlayers = Object.FindObjectsByType<PlayerNameSync>(FindObjectsSortMode.None);
+        PlayerController[] allPlayers = Object.FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
 
         foreach (var player in allPlayers)
         {
-            currentPlayers += player.playerName.Value.ToString() + "\n";
+            string nome = "Anonimo";
+            if (player.TryGetComponent<PlayerNameSync>(out var nameSync))
+            {
+                nome = nameSync.playerName.Value.ToString();
+            }
+			
+			if (player.OwnerClientId == 0)
+            {
+                nome += " <color=#FFA500>[HOST]</color>"; // Aggiunge l'etichetta arancione
+            }
+
+            // 1. Controlliamo prima se ha vinto
+            if (player.isWinner.Value)
+            {
+                currentPlayers += $"<color=yellow><b>{nome} - !!! HAI VINTO LA PARTITA !!!</b></color>\n";
+            }
+            // 2. Poi controlliamo se è morto
+            else if (player.isDead)
+            {
+                currentPlayers += $"<color=red><s>{nome}</s></color> - ELIMINATO\n";
+            }
+            // 3. Altrimenti mostriamo il punteggio normale
+            else
+            {
+                currentPlayers += $"{nome} - <color=#00FF00>Vite: {player.score.Value}</color>\n";
+            }
         }
 
         listText.text = currentPlayers;

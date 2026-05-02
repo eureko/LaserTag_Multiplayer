@@ -3,8 +3,27 @@ using UnityEngine;
 
 public class PlayerController : NetworkBehaviour
 {
-    [SerializeField] private GameObject targetPrefab;
-	public float moveSpeed = 10f;
+    
+[SerializeField] private GameObject targetPrefab;
+public float moveSpeed = 10f;
+
+// Variabile di rete: Tutti possono leggerla, MA SOLO IL SERVER PUÒ MODIFICARLA
+public NetworkVariable<int> score = new NetworkVariable<int>(
+	20, 
+	NetworkVariableReadPermission.Everyone, 
+	NetworkVariableWritePermission.Server
+);
+
+// Sapere se siamo ancora in gioco
+    public bool isDead = false;
+	
+// Variabile per sapere se questo giocatore ha vinto
+public NetworkVariable<bool> isWinner = new NetworkVariable<bool>(
+	false, 
+	NetworkVariableReadPermission.Everyone, 
+	NetworkVariableWritePermission.Server
+);
+	
 
   // [SerializeField] private float rotationSpeed = 1.0f; // Velocità di rotazione
 
@@ -49,7 +68,7 @@ private void SpawnTargets(int count)
 
 void Update()
 {
-    if (!IsOwner) return;
+    if (!IsOwner || isDead) return;
 
     // Usiamo GetAxisRaw per avere una risposta immediata (0 o 1, senza scivolamento)
     float rotationInput = Input.GetAxisRaw("Horizontal"); 
@@ -95,7 +114,7 @@ void Update()
                 // 2. Rendi il bersaglio invisibile e "fantasma" all'istante! 
                 // (Il Server lo distruggerà per davvero fra qualche millisecondo)
                 if (hit.collider.TryGetComponent<MeshRenderer>(out var mesh)) mesh.enabled = false;
-                if (hit.collider.TryGetComponent<Collider>(out var col)) col.enabled = false;
+                //if (hit.collider.TryGetComponent<Collider>(out var col)) col.enabled = false;
             }
         }
 
@@ -119,25 +138,41 @@ private void ShootServerRpc(Vector3 origin, Vector3 direction)
     Vector3 adjustedOrigin = origin + (direction * 1.5f);
     Vector3 endPoint = adjustedOrigin + (direction * 500f);
     
-    // Controlliamo il colpo vero (quello che fa i danni)
+    // Controlliamo il colpo (il server decide chi viene colpito)
     if (Physics.Raycast(adjustedOrigin, direction, out RaycastHit hit, 50f))
     {
         endPoint = hit.point;
 
-        // 1. Gestione colpo su altri giocatori
-        if (hit.collider.TryGetComponent<NetworkObject>(out var netObj) && netObj.OwnerClientId != OwnerClientId)
+        // 1. Gestione colpo su ALTRI GIOCATORI
+        if (hit.collider.TryGetComponent<PlayerController>(out var victimPlayer) && victimPlayer.OwnerClientId != OwnerClientId)
         {
-            NotifyHitClientRpc(netObj.OwnerClientId);
+            // Se la vittima è ancora viva, facciamo i calcoli
+            if (!victimPlayer.isDead)
+            {
+                victimPlayer.score.Value -= 2; // Togliamo 2 punti alla vittima
+                this.score.Value += 2;         // Diamo 2 punti a chi ha sparato
+                
+                NotifyHitClientRpc(victimPlayer.OwnerClientId);
+                
+                // Controlliamo se qualcuno ha vinto
+                ControllaVincitore();
+            }
         }
 
-        // 2. Gestione colpo su bersagli (Target)
-        if (hit.collider.CompareTag("Target"))
+        // 2. Gestione colpo su BERSAGLI (Target)
+        else if (hit.collider.CompareTag("Target"))
         {
-            // Diciamo a tutti gli ALTRI di far apparire l'esplosione
-            ShowHitEffectClientRpc(hit.point);
-            
-            // Distruzione ufficiale del bersaglio sul server
-            hit.collider.GetComponent<NetworkObject>().Despawn();
+            NetworkObject targetNetObj = hit.collider.GetComponent<NetworkObject>();
+
+            // CONTROLLO DI SICUREZZA: L'oggetto è ancora attivo sulla rete?
+            if (targetNetObj != null && targetNetObj.IsSpawned)
+            {
+                this.score.Value += 1; // Diamo 1 punto a chi ha colpito il bersaglio
+
+                // Diciamo agli altri di mostrare l'esplosione e distruggiamo il cubo
+                ShowHitEffectClientRpc(hit.point);
+                targetNetObj.Despawn();
+            }
         }
     }
 
@@ -196,6 +231,11 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
     }
 	public override void OnNetworkSpawn()
 	{
+		
+		base.OnNetworkSpawn();
+        score.OnValueChanged += AggiornaStatoVita;
+		
+		
 		// Recuperiamo la camera che abbiamo appena messo dentro il Prefab
 		Camera miaCamera = GetComponentInChildren<Camera>();
 
@@ -262,6 +302,68 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
         // {
         //     NotificationManager.Instance.ShowNotification(nome + " è entrato in partita!");
         // }
+    }
+	
+	
+
+    // Rimuove l'iscrizione per pulizia
+    public override void OnNetworkDespawn()
+    {
+        score.OnValueChanged -= AggiornaStatoVita;
+    }
+
+    // Questa funzione scatta in automatico SU TUTTI I PC ogni volta che il punteggio cambia
+    private void AggiornaStatoVita(int punteggioVecchio, int punteggioNuovo)
+    {
+        if (punteggioNuovo <= 0 && !isDead)
+        {
+            isDead = true;
+
+            // Faccio sparire il giocatore disattivando Mesh e Collider
+            if (TryGetComponent<MeshRenderer>(out var mesh)) mesh.enabled = false;
+            if (TryGetComponent<Collider>(out var col)) col.enabled = false;
+
+            if (IsOwner)
+            {
+                Debug.Log("<color=red>SEI STATO ELIMINATO!</color> Vite a zero.");
+                // Spegniamo il mirino
+                if (playerCanvas != null) playerCanvas.SetActive(false);
+            }
+        }
+    }
+
+    private void ControllaVincitore()
+    {
+        PlayerController[] tuttiIGiocatori = Object.FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
+        int giocatoriVivi = 0;
+        PlayerController ultimoRimasto = null; // Memorizziamo chi è rimasto vivo
+        
+        foreach (var p in tuttiIGiocatori)
+        {
+            if (!p.isDead) 
+            {
+                giocatoriVivi++;
+                ultimoRimasto = p;
+            }
+        }
+
+        // Se è rimasto un solo giocatore vivo (e c'era più di un giocatore in totale)
+        if (giocatoriVivi == 1 && tuttiIGiocatori.Length > 1 && ultimoRimasto != null)
+        {
+            // Il Server accende l'etichetta "Vincitore" sull'ultimo rimasto!
+            ultimoRimasto.isWinner.Value = true;
+            ultimoRimasto.AnnunciaVittoriaClientRpc();
+        }
+    
+    }
+
+    [ClientRpc]
+    private void AnnunciaVittoriaClientRpc()
+    {
+        if (!isDead && IsOwner)
+        {
+            Debug.Log("<color=yellow>!!! HAI VINTO LA PARTITA !!!</color>");
+        }
     }
 	
 	

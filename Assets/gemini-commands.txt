@@ -1,0 +1,33 @@
+=========================================
+       RIASSUNTO COMANDI GIT BASE
+=========================================
+
+1. CONFIGURAZIONE INIZIALE
+git config --global user.name "Nome"   : Imposta il tuo nome
+git config --global user.email "Email" : Imposta la tua email
+
+2. INIZIARE UN PROGETTO
+git init                               : Crea un nuovo repository vuoto
+git clone [url]                        : Scarica un progetto dal server
+
+3. FLUSSO DI LAVORO (Quotidiano)
+git status                             : Controlla lo stato dei file
+git add .                              : Prepara tutti i file modificati
+git commit -m "Messaggio"              : Salva il pacchetto in locale
+git log                                : Mostra lo storico dei salvataggi
+
+4. SINCRONIZZAZIONE CON IL SERVER
+git push origin main                   : Invia i tuoi salvataggi al server
+git pull                               : Scarica e unisce le ultime novità
+git fetch                              : Scarica le info sulle novità dal server
+
+5. GESTIONE RAMI (BRANCH)
+git branch                             : Mostra la lista dei rami
+git branch [nome]                      : Crea un nuovo ramo
+git switch [nome]                      : Spostati sul ramo specificato
+git merge [nome]                       : Unisci un ramo a quello attuale
+
+6. RIMEDI PER GLI ERRORI
+git restore [file]                     : Annulla modifiche non salvate a un file
+git reset [file]                       : Rimuove un file dalla preparazione (annulla add)
+git revert [id_commit]                 : Crea un commit che annulla quello precedente

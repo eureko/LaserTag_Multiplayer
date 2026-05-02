@@ -1,26 +1,28 @@
 using Unity.Netcode;
+using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections;
 
 public class CanvasNetworkUI : MonoBehaviour
 {
     public static CanvasNetworkUI Instance;
 
-    [Header("Elementi UI (Trascina qui dal Canvas)")]
+    [Header("Elementi UI")]
     public TMP_InputField nameInputField;
-    public Button hostButton;
-    public Button clientButton;
+    public Button playButton; 
     public TextMeshProUGUI statusText;
 
     [Header("Contenitori e Telecamere")]
     public GameObject uiPanel; 
     public GameObject menuCamera;
+    public GameObject playerListPanel;
 
     public string PlayerName { get; private set; } = "Anonimo";
-	
-	[Header("Scoreboard")]
-	public GameObject playerListPanel; // Trascina qui il PlayerListPanel
+    
+    // Variabile per capire se stiamo cercando una partita o se siamo già in gioco
+    private bool staSondandoLaRete = false;
 
     private void Awake()
     {
@@ -30,20 +32,18 @@ public class CanvasNetworkUI : MonoBehaviour
 
     private void Start()
     {
-        hostButton.onClick.AddListener(StartHost);
-        clientButton.onClick.AddListener(StartClient);
+        playButton.onClick.AddListener(AvviaMatchmaking);
         nameInputField.onValueChanged.AddListener(UpdateName);
+        
+        statusText.text = "Stato: Pronti a giocare!";
 
-        statusText.text = "Stato: In attesa...";
-
-        // Iscrizione agli eventi di rete di Unity per intercettare successi e fallimenti
+        // Sottoscrizione agli eventi di Netcode
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
     }
 
     private void OnDestroy()
     {
-        // Rimuoviamo l'iscrizione agli eventi quando lo script viene distrutto
         if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
@@ -53,53 +53,90 @@ public class CanvasNetworkUI : MonoBehaviour
 
     private void UpdateName(string newName)
     {
-        if (!string.IsNullOrWhiteSpace(newName))
-        {
+        if (!string.IsNullOrWhiteSpace(newName)) 
             PlayerName = newName;
-        }
     }
 
-    private void StartHost()
+    // 1. IL GIOCATORE PREME "ENTRA NELL'ARENA"
+    private void AvviaMatchmaking()
     {
-        statusText.text = "Avvio Host...";
-        // L'Host si connette istantaneamente al proprio computer, quindi possiamo nascondere il menu subito
-        if (NetworkManager.Singleton.StartHost())
+        statusText.text = "Ricerca arena in corso...";
+        staSondandoLaRete = true;
+        playButton.interactable = false;
+
+        // Configuriamo il trasporto per un tentativo di connessione lampo
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        if (transport != null)
         {
-            NascondiMenu();
+            transport.MaxConnectAttempts = 1; // Prova solo una volta
+            transport.ConnectTimeoutMS = 500; // Aspetta solo mezzo secondo
         }
-    }
 
-    private void StartClient()
-    {
-        statusText.text = "Ricerca Host in corso...";
-        
-        // Disabilitiamo temporaneamente i bottoni per evitare che l'utente clicchi mille volte
-        hostButton.interactable = false;
-        clientButton.interactable = false;
-
-        // Avviamo il client, ma NON nascondiamo ancora il menu!
+        // Proviamo ad entrare come Client
         NetworkManager.Singleton.StartClient();
     }
 
-    // Questa funzione scatta SOLO se il client riesce a trovare l'Host e si collega
+    // 2. SE TROVIAMO UN HOST, CI CONNETTIAMO
     private void OnClientConnected(ulong clientId)
     {
         if (clientId == NetworkManager.Singleton.LocalClientId)
         {
+            staSondandoLaRete = false;
             NascondiMenu();
         }
     }
 
-    // Questa funzione scatta se la connessione fallisce (es: socket chiuso, nessun Host trovato) o se l'Host si disconnette
+    // 3. SE NON TROVIAMO NESSUNO, SCATTA IL FALLIMENTO
     private void OnClientDisconnected(ulong clientId)
     {
         if (clientId == NetworkManager.Singleton.LocalClientId || clientId == 0)
         {
-            // Niente schermo nero: riaccendiamo tutto, segnaliamo l'errore e sblocchiamo i pulsanti
+            if (staSondandoLaRete)
+            {
+                // Abbiamo fallito la ricerca: ora resettiamo e diventiamo Host
+                staSondandoLaRete = false;
+                StartCoroutine(ResetEPuliziaPerHost());
+            }
+            else
+            {
+                // Disconnessione normale durante il gioco
+                MostraMenu();
+                statusText.text = "Sei stato disconnesso.";
+                playButton.interactable = true;
+            }
+        }
+    }
+
+    // 4. COROUTINE DI PULIZIA: Il segreto per evitare l'errore critico
+    private IEnumerator ResetEPuliziaPerHost()
+    {
+        statusText.text = "Nessuna arena trovata. Creazione in corso...";
+
+        // Spegniamo il NetworkManager per chiudere i socket rimasti aperti dal tentativo Client
+        NetworkManager.Singleton.Shutdown();
+
+        // Aspettiamo che il sistema abbia finito di pulire tutto
+        yield return new WaitUntil(() => !NetworkManager.Singleton.ShutdownInProgress);
+
+        // Ripristiniamo i valori di trasporto standard per i futuri Client che si uniranno a noi
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        if (transport != null)
+        {
+            transport.MaxConnectAttempts = 60; 
+            transport.ConnectTimeoutMS = 1000; 
+        }
+
+        // Ora che il terreno è pulito, avviamo l'Host
+        if (NetworkManager.Singleton.StartHost())
+        {
+            NascondiMenu();
+        }
+        else
+        {
+            // Se fallisce ancora, mostriamo l'errore e riabilitiamo il tasto
             MostraMenu();
-            statusText.text = "Errore: Nessun Host trovato!";
-            hostButton.interactable = true;
-            clientButton.interactable = true;
+            statusText.text = "Errore critico di rete!";
+            playButton.interactable = true;
         }
     }
 
@@ -107,14 +144,13 @@ public class CanvasNetworkUI : MonoBehaviour
     {
         if (uiPanel != null) uiPanel.SetActive(false);
         if (menuCamera != null) menuCamera.SetActive(false);
-		if (playerListPanel != null) playerListPanel.SetActive(true);
-        // NOTA: Non usiamo più "this.enabled = false;" altrimenti lo script non potrebbe 
-        // più ascoltare l'evento di disconnessione!
+        if (playerListPanel != null) playerListPanel.SetActive(true);
     }
 
     private void MostraMenu()
     {
         if (uiPanel != null) uiPanel.SetActive(true);
         if (menuCamera != null) menuCamera.SetActive(true);
+        if (playerListPanel != null) playerListPanel.SetActive(false);
     }
 }
