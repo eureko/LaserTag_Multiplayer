@@ -68,12 +68,42 @@ void Update()
     Vector3 movement = transform.forward * forwardInput * moveSpeed * Time.deltaTime;
     transform.Translate(movement, Space.World);
 
-    // 4. SPARO: Usiamo sempre la direzione attuale del cubo
+   // 4. SPARO: Usiamo sempre la direzione attuale del cubo
     if (Input.GetKeyDown(KeyCode.Space))
     {
-        // Fai partire il suono
         if (laserSound != null) laserSound.Play();
-		ShootServerRpc(transform.position, transform.forward);
+
+        Vector3 origin = transform.position;
+        Vector3 direction = transform.forward;
+        Vector3 adjustedOrigin = origin + (direction * 1.5f);
+        Vector3 endPoint = adjustedOrigin + (direction * 500f);
+
+        // Simulazione locale dell'impatto (Lag = 0)
+        if (Physics.Raycast(adjustedOrigin, direction, out RaycastHit hit, 50f))
+        {
+            endPoint = hit.point;
+
+            // -- NOVITÀ: DISTRUZIONE SIMULATA --
+            if (hit.collider.CompareTag("Target"))
+            {
+                // 1. Spawna le particelle sul tuo schermo all'istante
+                if (impactEffectPrefab != null)
+                {
+                    Instantiate(impactEffectPrefab, hit.point, Quaternion.identity);
+                }
+
+                // 2. Rendi il bersaglio invisibile e "fantasma" all'istante! 
+                // (Il Server lo distruggerà per davvero fra qualche millisecondo)
+                if (hit.collider.TryGetComponent<MeshRenderer>(out var mesh)) mesh.enabled = false;
+                if (hit.collider.TryGetComponent<Collider>(out var col)) col.enabled = false;
+            }
+        }
+
+        // Il Client disegna il SUO raggio istantaneamente
+        StartCoroutine(DrawLaserRoutine(adjustedOrigin, endPoint));
+
+        // Diciamo al Server di fare i calcoli "veri"
+        ShootServerRpc(origin, direction);
     }
 }
 
@@ -89,7 +119,7 @@ private void ShootServerRpc(Vector3 origin, Vector3 direction)
     Vector3 adjustedOrigin = origin + (direction * 1.5f);
     Vector3 endPoint = adjustedOrigin + (direction * 500f);
     
-    // Controlliamo il colpo
+    // Controlliamo il colpo vero (quello che fa i danni)
     if (Physics.Raycast(adjustedOrigin, direction, out RaycastHit hit, 50f))
     {
         endPoint = hit.point;
@@ -103,22 +133,40 @@ private void ShootServerRpc(Vector3 origin, Vector3 direction)
         // 2. Gestione colpo su bersagli (Target)
         if (hit.collider.CompareTag("Target"))
         {
-            // Spawn dell'effetto particellare (assicurati che sia registrato nel NetworkManager)
-            GameObject effect = Instantiate(impactEffectPrefab, hit.point, Quaternion.identity);
-            effect.GetComponent<NetworkObject>().Spawn();
+            // Diciamo a tutti gli ALTRI di far apparire l'esplosione
+            ShowHitEffectClientRpc(hit.point);
             
-            // Distruzione del bersaglio
+            // Distruzione ufficiale del bersaglio sul server
             hit.collider.GetComponent<NetworkObject>().Despawn();
         }
     }
 
-    // Chiamiamo il client per far vedere il raggio a tutti
+    // Chiamiamo il client per far vedere il raggio a tutti gli ALTRI giocatori
     ShowLaserClientRpc(adjustedOrigin, endPoint);
 }
 
 [ClientRpc]
+private void ShowHitEffectClientRpc(Vector3 position)
+{
+	// Se ho sparato IO, ignoro il comando perché ho già creato l'effetto nell'Update!
+	if (IsOwner) return;
+
+	// Se sono un altro giocatore, faccio nascere le particelle nel punto dell'impatto
+	if (impactEffectPrefab != null)
+	{
+		Instantiate(impactEffectPrefab, position, Quaternion.identity);
+	}
+}
+	
+
+[ClientRpc]
 private void ShowLaserClientRpc(Vector3 start, Vector3 end)
 {
+    // IMPORTANTISSIMO: Se sono io il proprietario del cubo che ha sparato, 
+    // ignoro questo messaggio perché ho GIA' disegnato il laser nell'Update!
+    if (IsOwner) return;
+
+    // Se sono un altro giocatore che osserva, disegno il laser di chi ha sparato
     StartCoroutine(DrawLaserRoutine(start, end));
 }
 

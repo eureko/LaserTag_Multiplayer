@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 2082752090480399232}
   - component: {fileID: 2401057727425742183}
   - component: {fileID: 7693679134532215259}
+  - component: {fileID: 3005763097384219147}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -147,7 +148,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetPrefab: {fileID: 883049318939397920, guid: ba998d19fff5a7d4b97051f046e4453e, type: 3}
   moveSpeed: 5
-  rotationSpeed: 10
   playerCanvas: {fileID: 5284179936824116080}
   laserSound: {fileID: 7693679134532215259}
   laserLine: {fileID: 2401057727425742183}
@@ -383,6 +383,53 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &3005763097384219147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 251407723406831759}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3458d07d176e51443ad0e23615bc6316, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerName:
+    m_InternalValue:
+      utf8LengthInBytes: 7
+      bytes:
+        offset0000:
+          byte0000: 65
+          byte0001: 110
+          byte0002: 111
+          byte0003: 110
+          byte0004: 105
+          byte0005: 109
+          byte0006: 111
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        byte0016: 0
+        byte0017: 0
+        byte0018: 0
+        byte0019: 0
+        byte0020: 0
+        byte0021: 0
+        byte0022: 0
+        byte0023: 0
+        byte0024: 0
+        byte0025: 0
+        byte0026: 0
+        byte0027: 0
+        byte0028: 0
+        byte0029: 0
 --- !u!1 &1249603952370801040
 GameObject:
   m_ObjectHideFlags: 0

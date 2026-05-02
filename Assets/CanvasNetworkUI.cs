@@ -18,6 +18,9 @@ public class CanvasNetworkUI : MonoBehaviour
     public GameObject menuCamera;
 
     public string PlayerName { get; private set; } = "Anonimo";
+	
+	[Header("Scoreboard")]
+	public GameObject playerListPanel; // Trascina qui il PlayerListPanel
 
     private void Awake()
     {
@@ -104,6 +107,7 @@ public class CanvasNetworkUI : MonoBehaviour
     {
         if (uiPanel != null) uiPanel.SetActive(false);
         if (menuCamera != null) menuCamera.SetActive(false);
+		if (playerListPanel != null) playerListPanel.SetActive(true);
         // NOTA: Non usiamo più "this.enabled = false;" altrimenti lo script non potrebbe 
         // più ascoltare l'evento di disconnessione!
     }
