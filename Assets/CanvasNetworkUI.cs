@@ -49,48 +49,37 @@ public class CanvasNetworkUI : MonoBehaviour
 
     // --- LOGICA PER IL PROF ---
     public void AvviaHost()
+{
+    UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+    if (transport != null)
     {
-        string ipLocale = ipInputField.text; // Prende l'IP che hai scritto (es. 10.76.244.212)
-
-        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-        if (transport != null)
-        {
-            // Fondamentale: impostiamo l'indirizzo dell'Host prima di partire
-            transport.ConnectionData.Address = ipLocale;
-            // Opzionale: se la scuola usa porte diverse, assicurati che sia 7777
-            transport.ConnectionData.Port = 7777; 
-        }
-
-        statusText.text = "Creazione arena su " + ipLocale + "...";
-        
-        if (NetworkManager.Singleton.StartHost())
-        {
-            NascondiMenu();
-        }
-        else
-        {
-            statusText.text = "Errore: Impossibile creare l'arena.";
-        }
+        // IMPORTANTE: Per l'Host usa "127.0.0.1" o lascia vuoto. 
+        // Unity capirà automaticamente di dover ascoltare su tutte le interfacce reali.
+        transport.ConnectionData.Address = "127.0.0.1"; 
+        transport.ConnectionData.Port = 7777;
     }
 
-    // --- LOGICA PER GLI ALUNNI ---
-   public void AvviaClient()
+    statusText.text = "Creazione arena...";
+    if (NetworkManager.Singleton.StartHost())
     {
-        string ipDestinazione = ipInputField.text;
-        
-        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-        if (transport != null)
-        {
-            // Forziamo l'indirizzo e assicuriamoci che la porta sia quella corretta (es. 7777)
-            transport.ConnectionData.Address = ipDestinazione;
-            // transport.ConnectionData.Port = 7777; // De-commenta questa riga se vuoi forzarla
-        }
-
-        statusText.text = "Ricerca arena su " + ipDestinazione + "...";
-        
-        // Avviamo il client
-        NetworkManager.Singleton.StartClient();
+        NascondiMenu();
     }
+}
+
+public void AvviaClient()
+{
+    string ipDestinazione = ipInputField.text; // Qui scriverai l'IP reale (es. 192.168.1.50)
+    UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+    
+    if (transport != null)
+    {
+        transport.ConnectionData.Address = ipDestinazione;
+        transport.ConnectionData.Port = 7777;
+    }
+
+    statusText.text = "Connessione a " + ipDestinazione + "...";
+    NetworkManager.Singleton.StartClient();
+}
 
     private void OnClientConnected(ulong clientId)
     {
