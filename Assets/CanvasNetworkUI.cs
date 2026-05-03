@@ -3,6 +3,10 @@ using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Unity.Services.Core;
+using Unity.Services.Authentication;
+using Unity.Services.Relay;
+using Unity.Services.Relay.Models;
 
 public class CanvasNetworkUI : MonoBehaviour
 {
@@ -10,19 +14,20 @@ public class CanvasNetworkUI : MonoBehaviour
 
     [Header("Elementi UI")]
     public TMP_InputField nameInputField;
-    public TMP_InputField ipInputField; // Trascina qui il nuovo InputField dell'IP
-    public Button hostButton;           // Trascina qui il tasto "Crea"
-    public Button clientButton;         // Trascina qui il tasto "Partecipa"
+    public TMP_InputField ipInputField;
+    public Button hostButton;
+    public Button clientButton;
     public TextMeshProUGUI statusText;
+    public TextMeshProUGUI codiceStanzaTesto;
 
     [Header("Contenitori")]
     public GameObject uiPanel; 
     public GameObject menuCamera;
     public GameObject playerListPanel;
 
-    [Header("Impostazioni Arena (Extra)")]
-    public GameObject targetPrefab;    // Trascina qui il Prefab del bersaglio
-    public int numeroTarget = 50;      // Quanti target vuoi creare all'inizio
+    [Header("Impostazioni Arena")]
+    public GameObject targetPrefab;
+    public int numeroTarget = 50;
 
     public string PlayerName { get; private set; } = "Anonimo";
 
@@ -32,18 +37,60 @@ public class CanvasNetworkUI : MonoBehaviour
         else Destroy(gameObject);
     }
 
-    private void Start()
+    private async void Start()
     {
         hostButton.onClick.AddListener(AvviaHost);
         clientButton.onClick.AddListener(AvviaClient);
         nameInputField.onValueChanged.AddListener(UpdateName);
         
-        // Di default mettiamo l'indirizzo locale per i tuoi test
-        ipInputField.text = "127.0.0.1";
-        statusText.text = "LaserTag Multiplayer Pronto";
+        // All'avvio il mouse deve essere libero
+        SbloccaMouse();
+
+        statusText.text = "Inizializzazione servizi...";
+
+        try 
+        {
+            await UnityServices.InitializeAsync();
+            if (!AuthenticationService.Instance.IsSignedIn)
+            {
+                await AuthenticationService.Instance.SignInAnonymouslyAsync();
+            }
+            statusText.text = "LaserTag Pronto (Relay Attivo)";
+            ipInputField.text = "";
+        }
+        catch (System.Exception e)
+        {
+            statusText.text = "Errore Servizi: " + e.Message;
+            Debug.LogError(e);
+        }
 
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+    }
+
+    // --- NUOVA FUNZIONE UPDATE PER ESC ---
+    private void Update()
+    {
+        // Se premo ESC
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            // Se il menu è chiuso (sto giocando), lo riapro
+            if (!uiPanel.activeSelf)
+            {
+                MostraMenu();
+            }
+            // Se il menu è già aperto, sblocchiamo comunque il mouse (sicurezza)
+            else
+            {
+                SbloccaMouse();
+            }
+        }
+
+        // Forza il mouse visibile se il menu è attivo (per evitare conflitti con altri script)
+        if (uiPanel.activeSelf && Cursor.lockState != CursorLockMode.None)
+        {
+            SbloccaMouse();
+        }
     }
 
     private void UpdateName(string newName)
@@ -51,108 +98,134 @@ public class CanvasNetworkUI : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(newName)) PlayerName = newName;
     }
 
-    // --- LOGICA PER IL PROF ---
-    public void AvviaHost()
+    public async void AvviaHost()
     {
-        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-        if (transport != null)
+        try 
         {
-            // Unity capirà automaticamente di dover ascoltare su tutte le interfacce reali.
-            transport.ConnectionData.Address = "127.0.0.1"; 
-            transport.ConnectionData.Port = 7777;
-        }
+            statusText.text = "Generazione codice...";
+            Allocation allocation = await RelayService.Instance.CreateAllocationAsync(20);
+            string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
-        statusText.text = "Creazione arena...";
-        if (NetworkManager.Singleton.StartHost())
+            UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+            transport.SetRelayServerData(
+                allocation.RelayServer.IpV4, 
+                (ushort)allocation.RelayServer.Port, 
+                allocation.AllocationIdBytes, 
+                allocation.Key, 
+                allocation.ConnectionData
+            );
+
+            if (NetworkManager.Singleton.StartHost())
+            {
+                string msg = "CODICE: " + joinCode;
+                statusText.text = msg;
+                if(codiceStanzaTesto != null) codiceStanzaTesto.text = msg;
+                NascondiMenu();
+                GeneraArena();
+            }
+        }
+        catch (System.Exception e)
         {
-            NascondiMenu();
-            // ESEGUIAMO LO SPAWN SOLO QUI: Una volta sola, solo sul Server/Host
-            GeneraArena();
+            statusText.text = "Errore Host: " + e.Message;
+        }
+    }
+
+    public async void AvviaClient()
+    {
+        try 
+        {
+            string codiceInserito = ipInputField.text;
+            if (string.IsNullOrEmpty(codiceInserito)) return;
+
+            statusText.text = "Connessione...";
+            JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(codiceInserito);
+
+            UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+            transport.SetRelayServerData(
+                joinAllocation.RelayServer.IpV4, 
+                (ushort)joinAllocation.RelayServer.Port, 
+                joinAllocation.AllocationIdBytes, 
+                joinAllocation.Key, 
+                joinAllocation.ConnectionData, 
+                joinAllocation.HostConnectionData
+            );
+
+            if (NetworkManager.Singleton.StartClient())
+            {
+                if(codiceStanzaTesto != null) codiceStanzaTesto.text = "CODICE: " + codiceInserito.ToUpper();
+            }
+        }
+        catch (System.Exception e)
+        {
+            statusText.text = "Codice errato!";
         }
     }
 
     private void GeneraArena()
     {
-        if (targetPrefab == null)
-        {
-            Debug.LogError("ERRORE: targetPrefab non assegnato in CanvasNetworkUI!");
-            return;
-        }
-
+        if (targetPrefab == null) return;
         for (int i = 0; i < numeroTarget; i++)
         {
-            // Posizione casuale (modifica i range -15, 15 in base alla grandezza del tuo piano)
             Vector3 randomPos = new Vector3(Random.Range(-15f, 15f), 0.5f, Random.Range(-15f, 15f));
-            
-            // Crea l'istanza sul server
             GameObject target = Instantiate(targetPrefab, randomPos, Quaternion.identity);
-            
-            // Lo rende visibile a tutti i client connessi e futuri
             target.GetComponent<NetworkObject>().Spawn();
         }
-        Debug.Log($"Arena popolata con {numeroTarget} bersagli dall'Host.");
-    }
-
-    public void AvviaClient()
-    {
-        string ipDestinazione = ipInputField.text; // Qui scriverai l'IP reale (es. 192.168.1.50)
-        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-        
-        if (transport != null)
-        {
-            transport.ConnectionData.Address = ipDestinazione;
-            transport.ConnectionData.Port = 7777;
-        }
-
-        statusText.text = "Connessione a " + ipDestinazione + "...";
-        NetworkManager.Singleton.StartClient();
     }
 
     private void OnClientConnected(ulong clientId)
     {
-        if (clientId == NetworkManager.Singleton.LocalClientId)
-        {
-            NascondiMenu();
-        }
+        if (clientId == NetworkManager.Singleton.LocalClientId) NascondiMenu();
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
-        if (clientId == NetworkManager.Singleton.LocalClientId)
-        {
-            MostraMenu();
-            statusText.text = "Disconnesso dall'arena.";
-        }
+        if (clientId == NetworkManager.Singleton.LocalClientId) MostraMenu();
     }
 
     private void NascondiMenu()
+{
+    uiPanel.SetActive(false);
+    menuCamera.SetActive(false);
+    playerListPanel.SetActive(true);
+
+    // DISABILITA I TASTI per evitare doppi click accidentali
+    hostButton.interactable = false;
+    clientButton.interactable = false;
+
+    // Blocca mouse per giocare
+    Cursor.lockState = CursorLockMode.Locked;
+    Cursor.visible = false;
+}
+
+private void MostraMenu()
+{
+    uiPanel.SetActive(true);
+    menuCamera.SetActive(true);
+    playerListPanel.SetActive(false);
+
+    // RIABILITA I TASTI solo se non siamo già connessi
+    // Se il NetworkManager non è attivo, permettiamo di cliccare
+    if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer && !NetworkManager.Singleton.IsClient)
     {
-        uiPanel.SetActive(false);
-        menuCamera.SetActive(false);
-        playerListPanel.SetActive(true);
+        hostButton.interactable = true;
+        clientButton.interactable = true;
+    }
+    else
+    {
+        // Se siamo già in partita, i tasti rimangono grigi (disabilitati)
+        hostButton.interactable = false;
+        clientButton.interactable = false;
     }
 
-    private void MostraMenu()
+    SbloccaMouse();
+}
+
+    private void SbloccaMouse()
     {
-        uiPanel.SetActive(true);
-        menuCamera.SetActive(true);
-        playerListPanel.SetActive(false);
-    }
-	
-    private void OnApplicationQuit()
-    {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.Shutdown();
-            Debug.Log("NetworkManager spento correttamente.");
-        }
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 
-    private void OnDestroy()
-    {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.Shutdown();
-        }
-    }
+    private void OnApplicationQuit() { NetworkManager.Singleton?.Shutdown(); }
+    private void OnDestroy() { NetworkManager.Singleton?.Shutdown(); }
 }
