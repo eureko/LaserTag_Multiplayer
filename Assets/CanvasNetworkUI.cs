@@ -7,6 +7,7 @@ using Unity.Services.Core;
 using Unity.Services.Authentication;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
+using Unity.Networking.Transport.Relay;
 
 public class CanvasNetworkUI : MonoBehaviour
 {
@@ -99,67 +100,65 @@ public class CanvasNetworkUI : MonoBehaviour
     }
 
     public async void AvviaHost()
+{
+    try 
     {
-        try 
-        {
-            statusText.text = "Generazione codice...";
-            Allocation allocation = await RelayService.Instance.CreateAllocationAsync(20);
-            string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+        statusText.text = "Generazione codice...";
+        Allocation allocation = await RelayService.Instance.CreateAllocationAsync(20);
+        string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
-            UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-            transport.SetRelayServerData(
-                allocation.RelayServer.IpV4, 
-                (ushort)allocation.RelayServer.Port, 
-                allocation.AllocationIdBytes, 
-                allocation.Key, 
-                allocation.ConnectionData
-            );
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
 
-            if (NetworkManager.Singleton.StartHost())
-            {
-                string msg = "CODICE: " + joinCode;
-                statusText.text = msg;
-                if(codiceStanzaTesto != null) codiceStanzaTesto.text = msg;
-                NascondiMenu();
-                GeneraArena();
-            }
-        }
-        catch (System.Exception e)
+        // --- MODIFICA QUI ---
+        // Creiamo i dati del server specificando esplicitamente il protocollo "wss"
+        var relayServerData = new RelayServerData(allocation, "wss");
+        transport.SetRelayServerData(relayServerData);
+        // --------------------
+
+        if (NetworkManager.Singleton.StartHost())
         {
-            statusText.text = "Errore Host: " + e.Message;
+            string msg = "CODICE: " + joinCode;
+            statusText.text = msg;
+            if(codiceStanzaTesto != null) codiceStanzaTesto.text = msg;
+            NascondiMenu();
+            GeneraArena();
         }
     }
+    catch (System.Exception e)
+    {
+        statusText.text = "Errore Host: " + e.Message;
+        Debug.LogError(e);
+    }
+}
 
     public async void AvviaClient()
+{
+    try 
     {
-        try 
+        string codiceInserito = ipInputField.text;
+        if (string.IsNullOrEmpty(codiceInserito)) return;
+
+        statusText.text = "Connessione...";
+        JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(codiceInserito);
+
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+
+        // --- MODIFICA QUI ---
+        var relayServerData = new RelayServerData(joinAllocation, "wss");
+        transport.SetRelayServerData(relayServerData);
+        // --------------------
+
+        if (NetworkManager.Singleton.StartClient())
         {
-            string codiceInserito = ipInputField.text;
-            if (string.IsNullOrEmpty(codiceInserito)) return;
-
-            statusText.text = "Connessione...";
-            JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(codiceInserito);
-
-            UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-            transport.SetRelayServerData(
-                joinAllocation.RelayServer.IpV4, 
-                (ushort)joinAllocation.RelayServer.Port, 
-                joinAllocation.AllocationIdBytes, 
-                joinAllocation.Key, 
-                joinAllocation.ConnectionData, 
-                joinAllocation.HostConnectionData
-            );
-
-            if (NetworkManager.Singleton.StartClient())
-            {
-                if(codiceStanzaTesto != null) codiceStanzaTesto.text = "CODICE: " + codiceInserito.ToUpper();
-            }
-        }
-        catch (System.Exception e)
-        {
-            statusText.text = "Codice errato!";
+            if(codiceStanzaTesto != null) codiceStanzaTesto.text = "CODICE: " + codiceInserito.ToUpper();
         }
     }
+    catch (System.Exception e)
+    {
+        statusText.text = "Codice errato!";
+        Debug.LogError(e);
+    }
+}
 
     private void GeneraArena()
     {
