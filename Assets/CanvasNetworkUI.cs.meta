@@ -3,7 +3,16 @@ guid: 7e0c1c634a0096742938750a52d205f8
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - nameInputField: {instanceID: 0}
+  - ipInputField: {instanceID: 0}
+  - hostButton: {instanceID: 0}
+  - clientButton: {instanceID: 0}
+  - statusText: {instanceID: 0}
+  - uiPanel: {instanceID: 0}
+  - menuCamera: {instanceID: 0}
+  - playerListPanel: {instanceID: 0}
+  - targetPrefab: {fileID: 883049318939397920, guid: ba998d19fff5a7d4b97051f046e4453e, type: 3}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 

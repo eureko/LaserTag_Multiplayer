@@ -864,6 +864,8 @@ MonoBehaviour:
   uiPanel: {fileID: 1853980754}
   menuCamera: {fileID: 120836915}
   playerListPanel: {fileID: 1330019848}
+  targetPrefab: {fileID: 0}
+  numeroTarget: 50
 --- !u!1 &656916065
 GameObject:
   m_ObjectHideFlags: 0

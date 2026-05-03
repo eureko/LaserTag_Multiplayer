@@ -36,20 +36,11 @@ private Vector3 lastLookDirection = Vector3.forward; // Aggiungi questa variabil
 
 void Start()
 {
-    if (!IsServer) return;
-
-    // Aggiungi questo log per vedere cosa succede
-    if (targetPrefab == null)
-    {
-        Debug.LogError("ERRORE: targetPrefab è NULL! Controlla l'Inspector del Player.");
-        return;
-    }
-
-   
-        SpawnTargets(50);
+    // Ora lo Start è vuoto perché la gestione dei target 
+    // è passata al CanvasNetworkUI (il regista della partita).
     
 }
-
+/*
 private void SpawnTargets(int count)
 {
     for (int i = 0; i < count; i++)
@@ -64,7 +55,7 @@ private void SpawnTargets(int count)
         targetInstance.GetComponent<NetworkObject>().Spawn();
     }
 }
-
+*/
 
 void Update()
 {

@@ -20,6 +20,10 @@ public class CanvasNetworkUI : MonoBehaviour
     public GameObject menuCamera;
     public GameObject playerListPanel;
 
+    [Header("Impostazioni Arena (Extra)")]
+    public GameObject targetPrefab;    // Trascina qui il Prefab del bersaglio
+    public int numeroTarget = 50;      // Quanti target vuoi creare all'inizio
+
     public string PlayerName { get; private set; } = "Anonimo";
 
     private void Awake()
@@ -49,37 +53,60 @@ public class CanvasNetworkUI : MonoBehaviour
 
     // --- LOGICA PER IL PROF ---
     public void AvviaHost()
-{
-    UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-    if (transport != null)
     {
-        // IMPORTANTE: Per l'Host usa "127.0.0.1" o lascia vuoto. 
-        // Unity capirà automaticamente di dover ascoltare su tutte le interfacce reali.
-        transport.ConnectionData.Address = "127.0.0.1"; 
-        transport.ConnectionData.Port = 7777;
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        if (transport != null)
+        {
+            // Unity capirà automaticamente di dover ascoltare su tutte le interfacce reali.
+            transport.ConnectionData.Address = "127.0.0.1"; 
+            transport.ConnectionData.Port = 7777;
+        }
+
+        statusText.text = "Creazione arena...";
+        if (NetworkManager.Singleton.StartHost())
+        {
+            NascondiMenu();
+            // ESEGUIAMO LO SPAWN SOLO QUI: Una volta sola, solo sul Server/Host
+            GeneraArena();
+        }
     }
 
-    statusText.text = "Creazione arena...";
-    if (NetworkManager.Singleton.StartHost())
+    private void GeneraArena()
     {
-        NascondiMenu();
-    }
-}
+        if (targetPrefab == null)
+        {
+            Debug.LogError("ERRORE: targetPrefab non assegnato in CanvasNetworkUI!");
+            return;
+        }
 
-public void AvviaClient()
-{
-    string ipDestinazione = ipInputField.text; // Qui scriverai l'IP reale (es. 192.168.1.50)
-    UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-    
-    if (transport != null)
+        for (int i = 0; i < numeroTarget; i++)
+        {
+            // Posizione casuale (modifica i range -15, 15 in base alla grandezza del tuo piano)
+            Vector3 randomPos = new Vector3(Random.Range(-15f, 15f), 0.5f, Random.Range(-15f, 15f));
+            
+            // Crea l'istanza sul server
+            GameObject target = Instantiate(targetPrefab, randomPos, Quaternion.identity);
+            
+            // Lo rende visibile a tutti i client connessi e futuri
+            target.GetComponent<NetworkObject>().Spawn();
+        }
+        Debug.Log($"Arena popolata con {numeroTarget} bersagli dall'Host.");
+    }
+
+    public void AvviaClient()
     {
-        transport.ConnectionData.Address = ipDestinazione;
-        transport.ConnectionData.Port = 7777;
-    }
+        string ipDestinazione = ipInputField.text; // Qui scriverai l'IP reale (es. 192.168.1.50)
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        
+        if (transport != null)
+        {
+            transport.ConnectionData.Address = ipDestinazione;
+            transport.ConnectionData.Port = 7777;
+        }
 
-    statusText.text = "Connessione a " + ipDestinazione + "...";
-    NetworkManager.Singleton.StartClient();
-}
+        statusText.text = "Connessione a " + ipDestinazione + "...";
+        NetworkManager.Singleton.StartClient();
+    }
 
     private void OnClientConnected(ulong clientId)
     {
@@ -110,5 +137,22 @@ public void AvviaClient()
         uiPanel.SetActive(true);
         menuCamera.SetActive(true);
         playerListPanel.SetActive(false);
+    }
+	
+    private void OnApplicationQuit()
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.Shutdown();
+            Debug.Log("NetworkManager spento correttamente.");
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.Shutdown();
+        }
     }
 }
