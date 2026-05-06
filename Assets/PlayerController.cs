@@ -304,24 +304,42 @@ private System.Collections.IEnumerator DrawLaserRoutine(Vector3 start, Vector3 e
     }
 
     // Questa funzione scatta in automatico SU TUTTI I PC ogni volta che il punteggio cambia
-    private void AggiornaStatoVita(int punteggioVecchio, int punteggioNuovo)
+    // Questa funzione scatta in automatico SU TUTTI I PC ogni volta che il punteggio cambia
+private void AggiornaStatoVita(int punteggioVecchio, int punteggioNuovo)
+{
+    if (punteggioNuovo <= 0 && !isDead)
     {
-        if (punteggioNuovo <= 0 && !isDead)
+        isDead = true;
+
+        // 1. Spegniamo TUTTI i Renderer (Cubo principale, Quad della Faccia, ecc.)
+        Renderer[] tuttiIRenderer = GetComponentsInChildren<Renderer>();
+        foreach (Renderer r in tuttiIRenderer)
         {
-            isDead = true;
+            r.enabled = false;
+        }
 
-            // Faccio sparire il giocatore disattivando Mesh e Collider
-            if (TryGetComponent<MeshRenderer>(out var mesh)) mesh.enabled = false;
-            if (TryGetComponent<Collider>(out var col)) col.enabled = false;
+        // 2. Spegniamo anche eventuali scritte su Canvas World Space (es. il Nome)
+        Canvas[] tuttiICanvas = GetComponentsInChildren<Canvas>();
+        foreach (Canvas c in tuttiICanvas)
+        {
+            c.enabled = false;
+        }
 
-            if (IsOwner)
-            {
-                Debug.Log("<color=red>SEI STATO ELIMINATO!</color> Vite a zero.");
-                // Spegniamo il mirino
-                if (playerCanvas != null) playerCanvas.SetActive(false);
-            }
+        // 3. Disattiviamo TUTTI i collider (Cubo, Faccia, ecc. per sicurezza)
+        Collider[] tuttiICollider = GetComponentsInChildren<Collider>();
+        foreach (Collider c in tuttiICollider)
+        {
+            c.enabled = false;
+        }
+
+        if (IsOwner)
+        {
+            Debug.Log("<color=red>SEI STATO ELIMINATO!</color> Vite a zero.");
+            // Spegniamo il mirino (la UI locale)
+            if (playerCanvas != null) playerCanvas.SetActive(false);
         }
     }
+}
 
     private void ControllaVincitore()
     {
